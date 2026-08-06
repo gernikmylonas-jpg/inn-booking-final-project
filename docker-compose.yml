@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: inn-booking-db
+    environment:
+      POSTGRES_DB: innbooking
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: inn-booking-final-project/Dockerfile
+    container_name: inn-booking-api
+    ports:
+      - "5000:8080"
+    depends_on:
+      - postgres
+    environment:
+      ConnectionStrings__Default: "Host=postgres;Database=innbooking;Username=postgres;Password=postgres"
+
+volumes:
+  pgdata:
