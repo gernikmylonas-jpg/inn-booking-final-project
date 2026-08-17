@@ -1,13 +1,5 @@
 import { useEffect, useState } from "react";
-
-// Shape returned by GET /api/rooms (RoomDto on the backend).
-// ASP.NET Core serializes to camelCase JSON by default, and Id is a Guid -> string.
-interface Room {
-    id: string;
-    name: string;
-    capacity: number;
-    dailyRate: number;
-}
+import type { Room } from "../types";
 
 const API_BASE_URL = "http://localhost:5070";
 
@@ -44,9 +36,10 @@ function RoofMark({ className = "" }: RoofMarkProps) {
 
 interface RoomCardProps {
     room: Room;
+    onSelect: (room: Room) => void;
 }
 
-function RoomCard({ room }: RoomCardProps) {
+function RoomCard({ room, onSelect }: RoomCardProps) {
     return (
         <div className="group bg-amber-50 border border-amber-300 overflow-hidden transition-shadow hover:shadow-lg">
             <div className="relative h-40 bg-green-900 overflow-hidden">
@@ -60,6 +53,7 @@ function RoomCard({ room }: RoomCardProps) {
                     <span className="text-sm font-medium text-amber-800">{formatPrice(room.dailyRate)}</span>
                     <button
                         type="button"
+                        onClick={() => onSelect(room)}
                         className="text-sm font-medium bg-green-800 text-white px-4 py-2 hover:bg-green-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-800"
                     >
                         Κράτηση
@@ -70,7 +64,11 @@ function RoomCard({ room }: RoomCardProps) {
     );
 }
 
-export default function HomePage() {
+interface HomePageProps {
+    onSelectRoom: (room: Room) => void;
+}
+
+export default function HomePage({ onSelectRoom }: HomePageProps) {
     const [menuOpen, setMenuOpen] = useState<boolean>(false);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -160,10 +158,10 @@ export default function HomePage() {
             <section className="max-w-5xl mx-auto px-6 pt-16 pb-14 text-center">
                 <RoofMark className="w-16 h-5 text-amber-700 mx-auto mb-6" />
                 <h1 className="font-serif text-4xl md:text-5xl text-stone-800 leading-tight">
-                    Μια όαση μακριά από το σπίτι σου
+                    Ένα σπίτι μακριά από το σπίτι σου
                 </h1>
                 <p className="text-stone-500 mt-4 max-w-xl mx-auto">
-                    Παραδοσιακά δωμάτια, φιλοξενία, και ησυχία — κάντε κράτηση
+                    Παραδοσιακά δωμάτια, φιλική φιλοξενία, και ησυχία — κάντε κράτηση
                     απευθείας, χωρίς μεσάζοντες.
                 </p>
             </section>
@@ -194,7 +192,7 @@ export default function HomePage() {
                 {!isLoading && !error && rooms.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         {rooms.map((room) => (
-                            <RoomCard key={room.id} room={room} />
+                            <RoomCard key={room.id} room={room} onSelect={onSelectRoom} />
                         ))}
                     </div>
                 )}
