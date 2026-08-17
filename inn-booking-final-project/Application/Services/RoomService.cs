@@ -13,7 +13,7 @@ public class RoomService
 	public async Task<List<RoomDto>> GetAllRoomsAsync()
 	{
 		var rooms = await _repository.GetAllAsync();
-		return rooms.Select(r => new RoomDto(r.Id, r.Name, r.Capacity, r.HourlyRate)).ToList();
+		return rooms.Select(r => new RoomDto(r.Id, r.Name, r.Capacity, r.DailyRate)).ToList();
 	}
 
 	public async Task<RoomDto> CreateRoomAsync(CreateRoomDto dto)
@@ -23,9 +23,9 @@ public class RoomService
 			Id = Guid.NewGuid(),
 			Name = dto.Name,
 			Capacity = dto.Capacity,
-			HourlyRate = dto.HourlyRate
+			DailyRate = dto.DailyRate
 		};
 		await _repository.AddAsync(room);
-		return new RoomDto(room.Id, room.Name, room.Capacity, room.HourlyRate);
+		return new RoomDto(room.Id, room.Name, room.Capacity, room.DailyRate);
 	}
 }
