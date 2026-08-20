@@ -38,3 +38,23 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Matches the unique index configured in AppDbContext.OnModelCreating.
 CREATE UNIQUE INDEX IF NOT EXISTS "IX_users_Email" ON users ("Email");
+
+-- Schema below matches inn-booking-final-project/Domain/Booking.cs exactly.
+-- "Status" is stored as an integer because EF Core maps a plain C# enum to
+-- its underlying int by default (BookingStatus.Confirmed = 0, Cancelled = 1) --
+-- no value converter is configured, so this must stay numeric, not text.
+CREATE TABLE IF NOT EXISTS bookings (
+    "Id"          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "RoomId"      uuid NOT NULL REFERENCES rooms ("Id"),
+    "UserId"      uuid NOT NULL REFERENCES users ("Id"),
+    "StartDate"   date NOT NULL,
+    "EndDate"     date NOT NULL,
+    "TotalPrice"  numeric(10, 2) NOT NULL,
+    "Status"      integer NOT NULL DEFAULT 0,
+    "CreatedAt"   timestamptz NOT NULL DEFAULT now()
+);
+
+-- Matches the composite index configured in AppDbContext.OnModelCreating,
+-- used when checking a room's booked date ranges for overlap.
+CREATE INDEX IF NOT EXISTS "IX_bookings_RoomId_StartDate_EndDate"
+    ON bookings ("RoomId", "StartDate", "EndDate");

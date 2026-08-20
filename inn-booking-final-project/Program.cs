@@ -16,11 +16,12 @@ builder.Services.AddScoped<IRoomRepository, RoomRepository>();
 builder.Services.AddScoped<RoomService>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<IBookingRepository, BookingRepository>();
+builder.Services.AddScoped<BookingService>();
 builder.Services.AddSingleton<JwtTokenService>();
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -49,6 +50,13 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+	// Without this, ASP.NET Core silently renames well-known inbound claims
+	// (e.g. "sub" -> the long legacy .NET ClaimTypes.NameIdentifier URI) when
+	// it reads the token back. That breaks any code -- like BookingsController --
+	// that looks up JwtRegisteredClaimNames.Sub ("sub") directly. Setting this
+	// to false keeps claims exactly as JwtTokenService wrote them.
+	options.MapInboundClaims = false;
+
 	options.TokenValidationParameters = new TokenValidationParameters
 	{
 		ValidateIssuer = true,

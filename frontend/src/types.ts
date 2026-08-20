@@ -19,3 +19,19 @@ export interface AuthResponse {
 	token: string;
 	user: User;
 }
+// Shape returned by GET /api/rooms/{roomId}/unavailable-dates
+export interface UnavailableRange {
+	startDate: string; // "yyyy-MM-dd"
+	endDate: string;
+}
+
+// Shape returned by POST /api/bookings and GET /api/bookings/mine
+export interface Booking {
+	id: string;
+	roomId: string;
+	roomName: string;
+	startDate: string;
+	endDate: string;
+	totalPrice: number;
+	status: string;
+}

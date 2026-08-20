@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
-import type { Room } from "../types";
+import { useEffect, useMemo, useState } from "react";
+import type { Room, UnavailableRange } from "../types";
 import { useAuth } from "../context/AuthContext";
+
+const API_BASE_URL = "http://localhost:5070";
 
 const GREEK_MONTHS = [
     "Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος",
@@ -9,11 +11,34 @@ const GREEK_MONTHS = [
 
 const GREEK_WEEKDAYS = ["Δ", "Τ", "Τ", "Π", "Π", "Σ", "Κ"];
 
-// TODO: the backend has no Booking/AvailabilityRule table yet, so there is no
-// real source of truth for which dates are taken. These are placeholder
-// "unavailable" day-of-month numbers just so the calendar has something to
-// show. Once a bookings endpoint exists, replace this with a fetch to it.
-const MOCK_UNAVAILABLE_DAYS = [10, 11, 12, 13];
+function pad(n: number): string {
+    return n.toString().padStart(2, "0");
+}
+
+function formatISO(year: number, month0: number, day: number): string {
+    return `${year}-${pad(month0 + 1)}-${pad(day)}`;
+}
+
+function addDaysISO(iso: string, days: number): string {
+    const d = new Date(`${iso}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
+// Expands [{startDate, endDate}, ...] half-open ranges from the API into a
+// Set of individual "yyyy-MM-dd" strings for O(1) lookup while rendering days.
+// endDate itself is a checkout day, not an occupied night, so it's excluded.
+function expandUnavailable(ranges: UnavailableRange[]): Set<string> {
+    const set = new Set<string>();
+    for (const r of ranges) {
+        let cursor = r.startDate;
+        while (cursor < r.endDate) {
+            set.add(cursor);
+            cursor = addDaysISO(cursor, 1);
+        }
+    }
+    return set;
+}
 
 function formatPrice(amount: number): string {
     return `${amount.toFixed(0)}€`;
@@ -83,8 +108,8 @@ function PhotoCarousel({ roomName }: { roomName: string }) {
                         aria-label={`Μετάβαση στη φωτογραφία ${index + 1}`}
                         onClick={() => goTo(index)}
                         className={`h-14 flex-1 border transition-colors ${index === activeIndex
-                                ? "bg-green-800 border-green-800"
-                                : "bg-amber-50 border-amber-300 hover:border-amber-500"
+                            ? "bg-green-800 border-green-800"
+                            : "bg-amber-50 border-amber-300 hover:border-amber-500"
                             }`}
                     />
                 ))}
@@ -94,33 +119,74 @@ function PhotoCarousel({ roomName }: { roomName: string }) {
 }
 
 interface AvailabilityCalendarProps {
-    checkIn: number | null;
-    checkOut: number | null;
-    onSelectDay: (day: number) => void;
+    year: number;
+    month: number; // 0-indexed
+    unavailableDates: Set<string>;
+    checkIn: string | null;
+    checkOut: string | null;
+    onSelectDate: (iso: string) => void;
+    onPrevMonth: () => void;
+    onNextMonth: () => void;
+    canGoPrev: boolean;
 }
 
-function AvailabilityCalendar({ checkIn, checkOut, onSelectDay }: AvailabilityCalendarProps) {
+function AvailabilityCalendar({
+    year,
+    month,
+    unavailableDates,
+    checkIn,
+    checkOut,
+    onSelectDate,
+    onPrevMonth,
+    onNextMonth,
+    canGoPrev,
+}: AvailabilityCalendarProps) {
+    const monthLabel = `${GREEK_MONTHS[month]} ${year}`;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // Monday-first
+
     const today = new Date();
-    const monthLabel = `${GREEK_MONTHS[today.getMonth()]} ${today.getFullYear()}`;
-    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-    const firstWeekday = (new Date(today.getFullYear(), today.getMonth(), 1).getDay() + 6) % 7; // Monday-first
+    const todayISO = formatISO(today.getFullYear(), today.getMonth(), today.getDate());
 
     const days = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth]);
     const leadingBlanks = Array.from({ length: firstWeekday });
 
-    function dayState(day: number): "unavailable" | "selected" | "in-range" | "available" {
-        if (MOCK_UNAVAILABLE_DAYS.includes(day)) return "unavailable";
-        if (day === checkIn || day === checkOut) return "selected";
-        if (checkIn !== null && checkOut !== null && day > checkIn && day < checkOut) return "in-range";
+    function dayISO(day: number): string {
+        return formatISO(year, month, day);
+    }
+
+    function dayState(day: number): "unavailable" | "past" | "selected" | "in-range" | "available" {
+        const iso = dayISO(day);
+        if (iso < todayISO) return "past";
+        if (unavailableDates.has(iso)) return "unavailable";
+        if (iso === checkIn || iso === checkOut) return "selected";
+        if (checkIn !== null && checkOut !== null && iso > checkIn && iso < checkOut) return "in-range";
         return "available";
     }
 
     return (
         <div className="bg-amber-50 border border-amber-300 p-5">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-1">
+                <button
+                    type="button"
+                    onClick={onPrevMonth}
+                    disabled={!canGoPrev}
+                    aria-label="Προηγούμενος μήνας"
+                    className="text-stone-500 hover:text-stone-800 disabled:opacity-30 disabled:cursor-not-allowed px-2 py-1"
+                >
+                    ‹
+                </button>
                 <h3 className="font-serif text-lg text-stone-800">{monthLabel}</h3>
-                <span className="text-xs text-stone-500">Επιλέξτε άφιξη &amp; αναχώρηση</span>
+                <button
+                    type="button"
+                    onClick={onNextMonth}
+                    aria-label="Επόμενος μήνας"
+                    className="text-stone-500 hover:text-stone-800 px-2 py-1"
+                >
+                    ›
+                </button>
             </div>
+            <p className="text-xs text-stone-500 text-center mb-4">Επιλέξτε άφιξη &amp; αναχώρηση</p>
 
             <div className="grid grid-cols-7 gap-1 text-center text-xs text-stone-500 mb-2">
                 {GREEK_WEEKDAYS.map((weekday, index) => (
@@ -134,19 +200,20 @@ function AvailabilityCalendar({ checkIn, checkOut, onSelectDay }: AvailabilityCa
                 ))}
                 {days.map((day) => {
                     const state = dayState(day);
+                    const disabled = state === "unavailable" || state === "past";
                     return (
                         <button
                             key={day}
                             type="button"
-                            disabled={state === "unavailable"}
-                            onClick={() => onSelectDay(day)}
-                            className={`h-9 text-sm border transition-colors ${state === "unavailable"
-                                    ? "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed line-through"
-                                    : state === "selected"
-                                        ? "bg-green-800 text-white border-green-800"
-                                        : state === "in-range"
-                                            ? "bg-green-100 border-green-300 text-green-900"
-                                            : "bg-white border-amber-200 text-stone-700 hover:border-green-700"
+                            disabled={disabled}
+                            onClick={() => onSelectDate(dayISO(day))}
+                            className={`h-9 text-sm border transition-colors ${disabled
+                                ? "bg-stone-200 text-stone-400 border-stone-200 cursor-not-allowed line-through"
+                                : state === "selected"
+                                    ? "bg-green-800 text-white border-green-800"
+                                    : state === "in-range"
+                                        ? "bg-green-100 border-green-300 text-green-900"
+                                        : "bg-white border-amber-200 text-stone-700 hover:border-green-700"
                                 }`}
                         >
                             {day}
@@ -174,35 +241,124 @@ interface RoomDetailsPageProps {
 }
 
 export default function RoomDetailsPage({ room, onBack, onRequireLogin }: RoomDetailsPageProps) {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const isLoggedIn = user !== null;
-    const [checkIn, setCheckIn] = useState<number | null>(null);
-    const [checkOut, setCheckOut] = useState<number | null>(null);
+
+    const today = new Date();
+    const [viewYear, setViewYear] = useState(today.getFullYear());
+    const [viewMonth, setViewMonth] = useState(today.getMonth());
+    const isCurrentMonth = viewYear === today.getFullYear() && viewMonth === today.getMonth();
+
+    const [unavailableRanges, setUnavailableRanges] = useState<UnavailableRange[]>([]);
+    const [isLoadingAvailability, setIsLoadingAvailability] = useState(true);
+
+    const [checkIn, setCheckIn] = useState<string | null>(null);
+    const [checkOut, setCheckOut] = useState<string | null>(null);
+
+    const [isBooking, setIsBooking] = useState(false);
+    const [bookingError, setBookingError] = useState<string | null>(null);
     const [bookingConfirmed, setBookingConfirmed] = useState(false);
 
-    function handleSelectDay(day: number) {
+    useEffect(() => {
+        let cancelled = false;
+
+        async function loadAvailability() {
+            try {
+                setIsLoadingAvailability(true);
+                const response = await fetch(`${API_BASE_URL}/api/rooms/${room.id}/unavailable-dates`);
+                if (!response.ok) {
+                    throw new Error(`Request failed with status ${response.status}`);
+                }
+                const data: UnavailableRange[] = await response.json();
+                if (!cancelled) setUnavailableRanges(data);
+            } catch {
+                // Fail quietly here -- the backend still rejects overlapping
+                // bookings on submit, so this is a display-only concern.
+            } finally {
+                if (!cancelled) setIsLoadingAvailability(false);
+            }
+        }
+
+        loadAvailability();
+        return () => {
+            cancelled = true;
+        };
+    }, [room.id]);
+
+    const unavailableDates = useMemo(() => expandUnavailable(unavailableRanges), [unavailableRanges]);
+
+    function goPrevMonth() {
+        if (isCurrentMonth) return;
+        if (viewMonth === 0) {
+            setViewYear((y) => y - 1);
+            setViewMonth(11);
+        } else {
+            setViewMonth((m) => m - 1);
+        }
+    }
+
+    function goNextMonth() {
+        if (viewMonth === 11) {
+            setViewYear((y) => y + 1);
+            setViewMonth(0);
+        } else {
+            setViewMonth((m) => m + 1);
+        }
+    }
+
+    function handleSelectDate(iso: string) {
         setBookingConfirmed(false);
+        setBookingError(null);
         if (checkIn === null || (checkIn !== null && checkOut !== null)) {
-            setCheckIn(day);
+            setCheckIn(iso);
             setCheckOut(null);
             return;
         }
-        if (day <= checkIn) {
-            setCheckIn(day);
+        if (iso <= checkIn) {
+            setCheckIn(iso);
             return;
         }
-        setCheckOut(day);
+        setCheckOut(iso);
     }
 
-    const nights = checkIn !== null && checkOut !== null ? checkOut - checkIn : 0;
+    const nights = useMemo(() => {
+        if (!checkIn || !checkOut) return 0;
+        const start = new Date(`${checkIn}T00:00:00Z`);
+        const end = new Date(`${checkOut}T00:00:00Z`);
+        return Math.round((end.getTime() - start.getTime()) / 86_400_000);
+    }, [checkIn, checkOut]);
+
     const totalCost = nights * room.dailyRate;
 
-    function handleBooking() {
-        if (!isLoggedIn) return;
-        if (nights <= 0) return;
-        // TODO: no POST /api/bookings endpoint exists on the backend yet.
-        // Wire this up to a real request once Booking is added to the API.
-        setBookingConfirmed(true);
+    async function handleBooking() {
+        if (!isLoggedIn || !checkIn || !checkOut || nights <= 0) return;
+
+        setIsBooking(true);
+        setBookingError(null);
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/bookings`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ roomId: room.id, startDate: checkIn, endDate: checkOut }),
+            });
+
+            if (!response.ok) {
+                const problem = await response.json().catch(() => null);
+                throw new Error(problem?.message ?? `Το αίτημα απέτυχε (${response.status}).`);
+            }
+
+            setBookingConfirmed(true);
+            setUnavailableRanges((prev) => [...prev, { startDate: checkIn, endDate: checkOut }]);
+            setCheckIn(null);
+            setCheckOut(null);
+        } catch (err) {
+            setBookingError(err instanceof Error ? err.message : "Κάτι πήγε στραβά. Δοκιμάστε ξανά.");
+        } finally {
+            setIsBooking(false);
+        }
     }
 
     return (
@@ -233,11 +389,21 @@ export default function RoomDetailsPage({ room, onBack, onRequireLogin }: RoomDe
 
                 <div className="grid md:grid-cols-3 gap-8 mt-10">
                     <div className="md:col-span-2 space-y-8">
-                        <AvailabilityCalendar
-                            checkIn={checkIn}
-                            checkOut={checkOut}
-                            onSelectDay={handleSelectDay}
-                        />
+                        {isLoadingAvailability ? (
+                            <p className="text-sm text-stone-500">Φόρτωση διαθεσιμότητας…</p>
+                        ) : (
+                            <AvailabilityCalendar
+                                year={viewYear}
+                                month={viewMonth}
+                                unavailableDates={unavailableDates}
+                                checkIn={checkIn}
+                                checkOut={checkOut}
+                                onSelectDate={handleSelectDate}
+                                onPrevMonth={goPrevMonth}
+                                onNextMonth={goNextMonth}
+                                canGoPrev={!isCurrentMonth}
+                            />
+                        )}
 
                         <div>
                             <h3 className="font-serif text-lg text-stone-800 mb-3">Τιμολόγιο</h3>
@@ -282,17 +448,21 @@ export default function RoomDetailsPage({ room, onBack, onRequireLogin }: RoomDe
 
                             <button
                                 type="button"
-                                disabled={!isLoggedIn || nights <= 0}
+                                disabled={!isLoggedIn || nights <= 0 || isBooking}
                                 onClick={handleBooking}
                                 className="w-full text-sm font-medium bg-amber-500 text-stone-900 px-4 py-2 hover:bg-amber-400 transition-colors disabled:bg-green-700 disabled:text-amber-100/60 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-400"
                             >
-                                Κράτηση
+                                {isBooking ? "Επεξεργασία…" : "Κράτηση"}
                             </button>
 
                             {isLoggedIn && nights <= 0 && (
                                 <p className="text-xs text-amber-100/70 mt-2">
                                     Επιλέξτε ημερομηνία άφιξης και αναχώρησης στο ημερολόγιο.
                                 </p>
+                            )}
+
+                            {bookingError && (
+                                <p className="text-xs text-red-200 mt-3 font-medium">{bookingError}</p>
                             )}
 
                             {bookingConfirmed && (
