@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Room } from "../types";
+import { useAuth } from "../context/AuthContext";
 
 const GREEK_MONTHS = [
     "Ιανουάριος", "Φεβρουάριος", "Μάρτιος", "Απρίλιος", "Μάιος", "Ιούνιος",
@@ -169,12 +170,14 @@ function AvailabilityCalendar({ checkIn, checkOut, onSelectDay }: AvailabilityCa
 interface RoomDetailsPageProps {
     room: Room;
     onBack: () => void;
+    onRequireLogin: () => void;
 }
 
-export default function RoomDetailsPage({ room, onBack }: RoomDetailsPageProps) {
+export default function RoomDetailsPage({ room, onBack, onRequireLogin }: RoomDetailsPageProps) {
+    const { user } = useAuth();
+    const isLoggedIn = user !== null;
     const [checkIn, setCheckIn] = useState<number | null>(null);
     const [checkOut, setCheckOut] = useState<number | null>(null);
-    const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [bookingConfirmed, setBookingConfirmed] = useState(false);
 
     function handleSelectDay(day: number) {
@@ -270,7 +273,7 @@ export default function RoomDetailsPage({ room, onBack }: RoomDetailsPageProps) 
                             {!isLoggedIn && (
                                 <button
                                     type="button"
-                                    onClick={() => setIsLoggedIn(true)}
+                                    onClick={onRequireLogin}
                                     className="w-full text-sm font-medium bg-amber-100 text-stone-800 px-4 py-2 mb-2 hover:bg-white transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-amber-400"
                                 >
                                     Σύνδεση

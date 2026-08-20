@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Room } from "../types";
+import { useAuth } from "../context/AuthContext";
 
 const API_BASE_URL = "http://localhost:5070";
 
@@ -66,9 +67,11 @@ function RoomCard({ room, onSelect }: RoomCardProps) {
 
 interface HomePageProps {
     onSelectRoom: (room: Room) => void;
+    onRequireLogin: () => void;
 }
 
-export default function HomePage({ onSelectRoom }: HomePageProps) {
+export default function HomePage({ onSelectRoom, onRequireLogin }: HomePageProps) {
+    const { user, logout } = useAuth();
     const [menuOpen, setMenuOpen] = useState<boolean>(false);
     const [rooms, setRooms] = useState<Room[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -125,12 +128,26 @@ export default function HomePage({ onSelectRoom }: HomePageProps) {
                         <a href="#footer" className="hover:text-stone-900 transition-colors">Επικοινωνία</a>
                     </nav>
 
-                    <button
-                        type="button"
-                        className="text-sm font-medium bg-green-800 text-white px-5 py-2 hover:bg-green-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-800"
-                    >
-                        Login
-                    </button>
+                    {user ? (
+                        <div className="hidden md:flex items-center gap-3 text-sm text-stone-600">
+                            <span>Γεια σου, {user.name.split(" ")[0]}</span>
+                            <button
+                                type="button"
+                                onClick={logout}
+                                className="text-sm font-medium bg-green-800 text-white px-5 py-2 hover:bg-green-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-800"
+                            >
+                                Αποσύνδεση
+                            </button>
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={onRequireLogin}
+                            className="text-sm font-medium bg-green-800 text-white px-5 py-2 hover:bg-green-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-green-800"
+                        >
+                            Login
+                        </button>
+                    )}
 
                     <button
                         type="button"
@@ -150,6 +167,15 @@ export default function HomePage({ onSelectRoom }: HomePageProps) {
                         <a href="#rooms">Δωμάτια</a>
                         <a href="#about">Σχετικά</a>
                         <a href="#footer">Επικοινωνία</a>
+                        {user ? (
+                            <button type="button" onClick={logout} className="text-left text-green-800 font-medium">
+                                Αποσύνδεση ({user.name.split(" ")[0]})
+                            </button>
+                        ) : (
+                            <button type="button" onClick={onRequireLogin} className="text-left text-green-800 font-medium">
+                                Login
+                            </button>
+                        )}
                     </div>
                 )}
             </header>

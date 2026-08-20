@@ -26,3 +26,15 @@ INSERT INTO rooms ("Id", "Name", "Capacity", "DailyRate") VALUES
     (gen_random_uuid(), 'Δωμάτιο 5 - Σουίτα με τζάκι',    3, 140.00),
     (gen_random_uuid(), 'Δωμάτιο 6 - Μονόκλινο, οικονομικό', 1, 55.00)
 ON CONFLICT DO NOTHING;
+
+-- Schema below matches inn-booking-final-project/Domain/User.cs exactly.
+CREATE TABLE IF NOT EXISTS users (
+    "Id"            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    "Name"          text NOT NULL,
+    "Email"         text NOT NULL,
+    "PasswordHash"  text NOT NULL,
+    "CreatedAt"     timestamptz NOT NULL DEFAULT now()
+);
+
+-- Matches the unique index configured in AppDbContext.OnModelCreating.
+CREATE UNIQUE INDEX IF NOT EXISTS "IX_users_Email" ON users ("Email");
